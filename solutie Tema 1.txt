@@ -1,0 +1,153 @@
+.data
+	v:.space 400
+	sir1:.space 400
+	sir2:.space 400
+	p:.space 4
+	nl:.byte '\n'
+	alfabet:.asciiz "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	afisNPrim:.asciiz "Numarul nu este prim"
+	gen:.asciiz "Generatorul g este: "
+.text
+newline:
+	lb $a0, nl
+	li $v0, 11
+	syscall
+	jr $ra
+
+main:
+	li $v0, 5
+	syscall
+	move $t0, $v0
+	sw $t0, p            				#citesc valoarea p si o salvez
+	
+	#verificam acum daca p este prim
+	blt $t0, 2, nuPrim     				#daca este mai mic decat 2 atunci nu este prim
+	beq $t0, 2, ENDloopPrime			#daca este 2 atunci sarim peste restul procesului de verificare
+	rem $t1, $t0, 2
+	beq $t1, 0, nuPrim				#daca este divizibil cu 2 nu este prim
+
+	li $t1, 3					# $t1 este indicele i din for cu care verificam daca este un divizor al lui p
+	loopPrime:
+		mul $t2, $t1, $t1			#verific daca i * i > p
+		bgt $t2, $t0, ENDloopPrime
+		
+		rem $t3, $t0, $t1
+		beq $t3, 0, nuPrim			#daca l-am gasit pe $t1 ca divizor, atunci nu este prim
+
+		addi $t1, $t1, 2			#mergem din 2 in 2, doar pe numerele impare
+		j loopPrime
+
+	nuPrim:
+		la $a0, afisNPrim
+		li $v0, 4
+		syscall
+
+		j exit
+
+
+	ENDloopPrime:					# acum cautam generatorul g
+	li $t1, 1					# cautam g; $t1 = g
+	li $t7, 0					# t7 este indexul in vector; am pus t7 deoarece am modificat codul mai tarziu
+	sw $t1, v($t7)					# g^0 = 1
+	addi $t7, 4
+	beq $t0, 2, gasitG				# daca p = 2 atunci singurul generator este 1
+	cautaG:
+		li $t7, 4				# cand cautam un nou generator, indexul se intoarce pe pozitia 2
+		addi $t1, $t1, 1			# incepem cu 2 deoarece 1 nu poate fi generator
+		sw $t1, v($t7)
+		addi $t7, 4
+	
+		move $t2, $t1				# $t2 = g_anterior
+		li $t9, 1				# $t9 reprezinta puterea la care se ridiga g
+							# am ales t9 deoarece este mai usor de urmarit puterea la care se ridica g
+							# singura posibilitate ca g sa fie generator este daca ridicat la p-1 sa dea 1, si sa nu mai 
+							# existe o putere mai mica b, exceptand 0, astfel incat g^b = 1
+		subu $t8, $t0, 1			# mergem pana la p-1 = $t8
+		ridicaPut:
+			addi $t9, 1			# incepem verificarea mai intai cu g^2
+			mul $t2, $t2, $t1		# inmultim g_ant cu g
+			rem $t2, $t2, $t0		# facem (g_ant*g)%p
+			sw $t2, v($t7)
+			addi $t7, 4
+
+			beq $t2, 1, verif1		# verificam daca g^b = 1 si b = p-1
+			
+			j ridicaPut
+		
+		verif1:	
+			beq $t9, $t8, gasitG
+			blt $t9, $t8, cautaG
+							
+
+	gasitG:						#am gasit generatorul, acesta fiind salvat in $t1
+	la $a0, gen
+	li $v0, 4
+	syscall
+	move $a0, $t1
+	li $v0, 1
+	syscall
+	jal newline					# in momentul de fata avem $t0 = p si $t1 = g
+
+	subu $t7, $t7, 4
+	sw $0, v($t7)
+	
+	la $a0, sir1
+	li $a1, 400	
+	li $v0, 8
+	syscall
+	
+	li $t9, 0					# $t9 este indexul in sir1 (primul sir citit)
+	codeazaV:
+		lb $t2, sir1($t9)			# in $t2 am caracterul curent
+		addi $t9, 1
+		
+		li $t5, 10				# 10 este codul ascii pt newline
+		beq $t2, $t5, sfCodeaza
+		
+		subu $t2, $t2, 65			# acum trebuie sa-l gasim pe g^t2 si sa-l afisam
+		mul $t2, $t2, 4
+		lw $t3, v($t2)
+		lb $a0, alfabet($t3)
+		li $v0, 11
+		syscall
+
+		j codeazaV
+	
+	sfCodeaza:
+	jal newline
+	
+	la $a0, sir2
+	li $a1, 400
+	li $v0, 8
+	syscall
+
+	li $t9, 0
+	decodeaza:
+		lb $t2, sir2($t9)
+		addi $t9, 1
+
+		beqz $t2, exit
+		
+		subu $t2, $t2, 65
+
+		li $t7, 0
+		li $t8, 0
+		cautaVal:				# cautam pe ce poz se afla t2
+			lw $t3, v($t8)
+			beq $t3, $t2, aflatPoz
+
+			addi $t7, 1
+			addi $t8, 4
+			j cautaVal
+		
+		aflatPoz:				# l-am gasit la poz $t7
+		lb $a0, alfabet($t7)
+		li $v0, 11
+		syscall
+
+		j decodeaza
+		
+
+	exit:
+		li $v0, 10
+		syscall
